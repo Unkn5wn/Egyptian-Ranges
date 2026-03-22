@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Egyptian Hieroglyphs Extended-A Range Tool (Dropdown, Inverse, Copy, Download)</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 2em auto; background: #f9f9f9; }
+    h1 { text-align: center; }
+    label, input, textarea, button, select { font-size: 1em; }
+    .ranges { margin-bottom: 1em; }
+    .controls { margin-bottom: 1em; }
+    .invopt { margin-bottom: 1em; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #bbb; padding: 4px 8px; text-align: left; }
+    .small { font-size: 0.92em; color: #555; }
+    .output { background: #fff; border: 1px solid #ddd; padding: 0.6em; }
+    select[multiple] { width: 100%; min-height: 170px; }
+    .utility-buttons { display: flex; gap: 1em; margin: 0.8em 0 1em 0; }
+    .codepoint-area { width: 100%; height: 180px; font-size: 1em; margin-top: 0.3em; }
+  </style>
+</head>
+<body>
+  <h1>Egyptian Hieroglyphs Extended-A Range Tool</h1>
+  <div class="ranges">
+    <label for="rangeSelect"><strong>Select Ranges</strong> (hold Ctrl/Cmd to select multiple):</label>
+    <select id="rangeSelect" multiple>
+      <option value="13460-1355F">13460-1355F</option>
+      <option value="13560-1365F">13560-1365F</option>
+      <option value="13660-1375F">13660-1375F</option>
+      <option value="13760-1385F">13760-1385F</option>
+      <option value="13860-1395F">13860-1395F</option>
+      <option value="13960-13A5F">13960-13A5F</option>
+      <option value="13A60-13B5F">13A60-13B5F</option>
+      <option value="13B60-13C5F">13B60-13C5F</option>
+      <option value="13C60-13D5F">13C60-13D5F</option>
+      <option value="13D60-13E5F">13D60-13E5F</option>
+      <option value="13E60-13F4F">13E60-13F4F</option>
+      <option value="13F50-1403F">13F50-1403F</option>
+      <option value="14040-1412F">14040-1412F</option>
+      <option value="14130-1421F">14130-1421F</option>
+      <option value="14220-1430F">14220-1430F</option>
+      <option value="14310-143FF">14310-143FF</option>
+    </select>
+    <div class="controls">
+      <button type="button" onclick="selectAllRanges()">Select All</button>
+      <button type="button" onclick="clearRanges()">Clear</button>
+    </div>
+    <div class="small">Unicode Standard, Version 17.0 Egyptian Hieroglyphs Extended-A: <strong>13460–143FF</strong></div>
+    <div class="invopt">
+      <label><input type="checkbox" id="inverseCheck"> Inverse HEX (reverse digits, e.g., 13460 → 06431)</label>
+    </div>
+  </div>
+
+  <button onclick="showRanges()">Show List for Selected Ranges</button>
+
+  <div class="utility-buttons" id="utilityButtons" style="display:none;">
+    <button type="button" onclick="copyCodepoints()">Copy Codepoints</button>
+    <button type="button" onclick="downloadCodepoints()">Download as .txt</button>
+  </div>
+  <textarea readonly class="codepoint-area" id="codepointsArea" style="display:none;"></textarea>
+
+  <div id="output" class="output"></div>
+
+  <script>
+    function getSelectedRanges() {
+      const select = document.getElementById('rangeSelect');
+      return Array.from(select.selectedOptions).map(opt => opt.value);
+    }
+
+    function selectAllRanges() {
+      const select = document.getElementById('rangeSelect');
+      for (let i = 0; i < select.options.length; i++) {
+        select.options[i].selected = true;
+      }
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('codepointsArea').style.display = "none";
+      document.getElementById('utilityButtons').style.display = "none";
+    }
+
+    function clearRanges() {
+      const select = document.getElementById('rangeSelect');
+      for (let i = 0; i < select.options.length; i++) {
+        select.options[i].selected = false;
+      }
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('codepointsArea').style.display = "none";
+      document.getElementById('utilityButtons').style.display = "none";
+    }
+
+    function parseHexRange(line) {
+      const match = /^([0-9A-Fa-f]{4,6})\s*-\s*([0-9A-Fa-f]{4,6})$/.exec(line.trim());
+      if (!match) return null;
+      const start = parseInt(match[1], 16);
+      const end = parseInt(match[2], 16);
+      if (isNaN(start) || isNaN(end) || start > end) return null;
+      // Clamp to valid range
+      if (end > 0x143FF) return null;
+      if (start < 0x13460) return null;
+      return { start, end };
+    }
+
+    // Invert hex digits (e.g., 13460 -> 06431), always at least 5 digits
+    function invertHex(code) {
+      let hex = code.toString(16).toUpperCase().padStart(5, '0');
+      return hex.split('').reverse().join('');
+    }
+
+    // Provide a copyable and downloadable output of all codepoints
+    let currentCodepointListText = "";
+
+    function showRanges() {
+      const lines = getSelectedRanges();
+      const inverse = document.getElementById('inverseCheck').checked;
+      let codes = [];
+      let outHtml = '';
+      let totalCount = 0;
+      let codepointList = [];
+      
+      document.getElementById('output').innerHTML = ''; // clear
+      
+      if (lines.length === 0) {
+        document.getElementById('output').innerHTML = "<span class='small'>No ranges selected.</span>";
+        document.getElementById('utilityButtons').style.display = "none";
+        document.getElementById('codepointsArea').style.display = "none";
+        return;
+      }
+      outHtml += "<table><thead><tr><th>Range</th><th>Count</th><th>First</th><th>Last</th></tr></thead><tbody>";
+
+      for (const line of lines) {
+        const range = parseHexRange(line);
+        if (!range) {
+          outHtml += `<tr><td colspan=4 style="color:#c00;">Invalid: <code>${line}</code></td></tr>`;
+          continue;
+        }
+        const fromHex = range.start.toString(16).toUpperCase();
+        const toHex = range.end.toString(16).toUpperCase();
+        const count = range.end - range.start + 1;
+        totalCount += count;
+        codes.push({ start: range.start, end: range.end });
+
+        outHtml += `<tr><td><code>${fromHex}-${toHex}</code></td><td>${count}</td><td>${fromHex}</td><td>${toHex}</td></tr>`;
+      }
+      outHtml += "</tbody></table>";
+      outHtml += `<div class="small">Total codepoints: <strong>${totalCount}</strong></div>`;
+
+      // Prepare the codepoint list (as plain text, for copy/download)
+      codes.forEach(range => {
+        for (let i = range.start; i <= range.end; ++i) {
+          let hex = i.toString(16).toUpperCase().padStart(5, '0');
+          codepointList.push(inverse ? invertHex(i) : hex);
+        }
+      });
+
+      currentCodepointListText = codepointList.join('\n');
+      // Display codepoint list area and utility buttons if any codepoints
+      if (codepointList.length > 0) {
+        document.getElementById('utilityButtons').style.display = "flex";
+        document.getElementById('codepointsArea').style.display = "";
+        document.getElementById('codepointsArea').value = currentCodepointListText;
+      } else {
+        document.getElementById('utilityButtons').style.display = "none";
+        document.getElementById('codepointsArea').style.display = "none";
+      }
+
+      // Optionally, show all values per block in HTML
+      outHtml += "<details><summary><strong>Show all codepoints as HEX" + (inverse ? " (Inverse)" : "") + "</strong></summary><pre>";
+      outHtml += currentCodepointListText + "\n";
+      outHtml += "</pre></details>";
+
+      document.getElementById('output').innerHTML = outHtml;
+    }
+
+    function copyCodepoints() {
+      if (!currentCodepointListText) return;
+      navigator.clipboard.writeText(currentCodepointListText)
+        .then(() => {
+          alert('Codepoints copied to clipboard!');
+        })
+        .catch(() => {
+          alert('Failed to copy to clipboard.');
+        });
+    }
+
+    function downloadCodepoints() {
+      if (!currentCodepointListText) return;
+      const blob = new Blob([currentCodepointListText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'egyptian_hieroglyphs_codepoints.txt';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 200);
+    }
+  </script>
+</body>
+</html>
